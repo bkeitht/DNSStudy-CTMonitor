@@ -21,7 +21,7 @@ general:
     enabled: true
     ct_index_file: "/data/ct_index.json"
   buffer_sizes:
-    websocket: 300
+    websocket: 4096
     ctlog: 1000
     broadcastmanager: 10000
   disable_default_logs: false
