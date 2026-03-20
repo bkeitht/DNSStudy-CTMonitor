@@ -16,6 +16,7 @@ import sys
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import quote
 
 import asyncpg
 import httpx
@@ -30,8 +31,8 @@ CERTSTREAM_WS_URL = os.environ.get("CERTSTREAM_WS_URL", "ws://certstream:8080/")
 POSTGRES_DSN = os.environ.get(
     "POSTGRES_DSN",
     "postgresql://{user}:{password}@{host}:{port}/{db}".format(
-        user=os.environ.get("POSTGRES_USER", "dnsstudy"),
-        password=os.environ.get("POSTGRES_PASSWORD", ""),
+        user=quote(os.environ.get("POSTGRES_USER", "dnsstudy"), safe=""),
+        password=quote(os.environ.get("POSTGRES_PASSWORD", ""), safe=""),
         host=os.environ.get("POSTGRES_HOST", "dnsstudy-postgres"),
         port=os.environ.get("POSTGRES_PORT", "5432"),
         db=os.environ.get("POSTGRES_DB", "dnsstudy"),
