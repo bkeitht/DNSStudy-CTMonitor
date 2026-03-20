@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -104,7 +105,7 @@ jobs:
   deploy:
     name: Deploy to server
     needs: [build-certstream, build-ct-stream-filter, build-ct-watcher]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -117,9 +118,26 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
-            cd ${{ secrets.DEPLOY_PATH || '~/DNSStudy-CTMonitor' }}
+            DEPLOY_DIR="${{ secrets.DEPLOY_PATH }}"
+            DEPLOY_DIR="${DEPLOY_DIR:-$HOME/DNSStudy-CTMonitor}"
+
+            if [ ! -d "$DEPLOY_DIR" ]; then
+              echo "--- First deploy: cloning repo ---"
+              git clone https://github.com/bkeitht/DNSStudy-CTMonitor.git "$DEPLOY_DIR"
+            fi
+
+            cd "$DEPLOY_DIR"
             git pull origin main
-            docker compose pull 2>/dev/null || true
+
+            # Create .env from example if missing
+            if [ ! -f .env ]; then
+              echo "--- Creating .env from .env.example ---"
+              cp .env.example .env
+            fi
+
+            # Ensure docker network exists
+            docker network create dnsstudy-network 2>/dev/null || true
+
             docker compose build
             docker compose up -d
             echo "--- Health check ---"
