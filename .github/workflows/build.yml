@@ -109,37 +109,70 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - name: Install SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            DEPLOY_DIR="${{ secrets.DEPLOY_PATH }}"
-            DEPLOY_DIR="${DEPLOY_DIR:-$HOME/DNSStudy-CTMonitor}"
-
-            if [ ! -d "$DEPLOY_DIR" ]; then
-              echo "--- First deploy: cloning repo ---"
-              git clone https://github.com/bkeitht/DNSStudy-CTMonitor.git "$DEPLOY_DIR"
-            fi
-
+      - name: Pull latest code
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'SCRIPT'
+          set -e
+          DEPLOY_DIR="${HOME}/DNSStudy-CTMonitor"
+          if [ -d "$DEPLOY_DIR" ]; then
             cd "$DEPLOY_DIR"
-            git pull origin main
+            git fetch origin
+            git reset --hard origin/main
+          else
+            git clone https://github.com/bkeitht/DNSStudy-CTMonitor.git "$DEPLOY_DIR"
+          fi
+          SCRIPT
 
-            # Create .env from example if missing
-            if [ ! -f .env ]; then
-              echo "--- Creating .env from .env.example ---"
-              cp .env.example .env
-            fi
+      - name: Generate .env
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
+          DNSSTUDY_API_URL: ${{ secrets.DNSSTUDY_API_URL }}
+        run: |
+          # Use printf for safe handling of passwords with special characters
+          {
+            printf 'POSTGRES_HOST=%s\n' "${POSTGRES_HOST:-dnsstudy-postgres}"
+            printf 'POSTGRES_PORT=%s\n' "${POSTGRES_PORT:-5432}"
+            printf 'POSTGRES_DB=%s\n' "${POSTGRES_DB:-dnsstudy}"
+            printf 'POSTGRES_USER=%s\n' "${POSTGRES_USER:-dnsstudy}"
+            printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
+            printf 'DNSSTUDY_API_URL=%s\n' "${DNSSTUDY_API_URL:-http://dnsstudy-api:8000}"
+            printf 'CERTSTREAM_WS_URL=ws://certstream:8080/\n'
+            printf 'PATTERN_RELOAD_INTERVAL=300\n'
+            printf 'HEARTBEAT_INTERVAL=60\n'
+            printf 'WATCHLIST_REFRESH_INTERVAL=300\n'
+          } | ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+                ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+                'cat > ~/DNSStudy-CTMonitor/.env && chmod 600 ~/DNSStudy-CTMonitor/.env'
 
-            # Ensure docker network exists
-            docker network create dnsstudy-network 2>/dev/null || true
+      - name: Deploy
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'SCRIPT'
+          set -e
+          cd ~/DNSStudy-CTMonitor
 
-            docker compose build
-            docker compose up -d
-            echo "--- Health check ---"
-            sleep 10
-            docker compose ps
+          # Ensure docker network exists
+          docker network create dnsstudy-network 2>/dev/null || true
+
+          docker compose build
+          docker compose up -d
+          echo "--- Health check ---"
+          sleep 10
+          docker compose ps
+          SCRIPT
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
