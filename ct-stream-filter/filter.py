@@ -524,8 +524,8 @@ async def heartbeat_loop() -> None:
                         resp.status_code,
                         resp.text[:200],
                     )
-            except Exception:
-                logger.warning("Heartbeat failed", exc_info=True)
+            except Exception as e:
+                logger.debug("Heartbeat failed: %s", e)
 
 
 # ---------------------------------------------------------------------------
