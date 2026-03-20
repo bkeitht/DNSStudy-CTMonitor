@@ -17,7 +17,7 @@ services:
       resources:
         limits:
           cpus: "1.0"
-          memory: 512M
+          memory: 1G
     networks:
       - dnsstudy-network
     logging:
