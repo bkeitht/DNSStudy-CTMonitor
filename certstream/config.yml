@@ -1,0 +1,28 @@
+# certstream-server-go configuration
+# Docs: https://github.com/d-Rickyy-b/certstream-server-go/wiki/Configuration
+
+webserver:
+  listen_addr: "0.0.0.0"
+  listen_port: 8080
+  full_url: "/full-stream"
+  lite_url: "/"
+  domains_only_url: "/domains-only"
+  compression_enabled: false
+
+prometheus:
+  enabled: true
+  listen_addr: "0.0.0.0"
+  listen_port: 9090
+  metrics_url: "/metrics"
+  expose_system_metrics: false
+
+general:
+  recovery:
+    enabled: true
+    ct_index_file: "/data/ct_index.json"
+  buffer_sizes:
+    websocket: 300
+    ctlog: 1000
+    broadcastmanager: 10000
+  disable_default_logs: false
+  drop_old_logs: true
